@@ -1,6 +1,7 @@
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
 
@@ -84,7 +85,7 @@ int main(int argc, char *argv[])
 			printf("Usage: apa102 -r <0 - 255> -g <0 - 255> -b <0 - 255> -l <0 - 31>\n");
 			return 1;
 		default:
-			abort ();
+			return 1;
 		}
 	}
 
@@ -102,7 +103,8 @@ int main(int argc, char *argv[])
 	}
 
 	//end_frame(1 + (leds / 8));  // One extra clock cycle per LED, but we can only send bytes
-	end_frame(extra);  // One extra clock cycle per LED, but we can only send bytes
+//	end_frame(extra);  // One extra clock cycle per LED, but we can only send bytes
+	start_frame();
 
 	if (cycle) {
 //		brightness = 0;

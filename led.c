@@ -9,6 +9,9 @@
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
 
+#define LEDS_MAX 10
+#define LED_STATE_FILE "/tmp/ledstate.json"
+
 int start_frame()
 {
 	int i;
@@ -81,8 +84,6 @@ int randomize(uint8_t *r, uint8_t *g, uint8_t *b) {
 	return 0;
 }
 
-#define LEDS_MAX 10
-
 int main(int argc, char *argv[])
 {
 	uint32_t colour = 0;
@@ -90,7 +91,7 @@ int main(int argc, char *argv[])
 	uint8_t brightness = 31;
 	uint8_t leds = LEDS_MAX;
 	uint16_t delay = 10;
-	int i, j, c;
+	int i, c;
 	int position = 0;
 	int clear = 0;
 	json_object *state = NULL;
@@ -138,10 +139,11 @@ int main(int argc, char *argv[])
 
 	if (clear) {
 		clear_display(LEDS_MAX);
+		remove(LED_STATE_FILE);
 		return 0;
 	}
 
-	state = json_object_from_file("/tmp/leds.json");
+	state = json_object_from_file(LED_STATE_FILE);
 	
 	// Load led configuration - if doesn't exist, then create it
 	if (NULL == state) {
@@ -177,7 +179,7 @@ int main(int argc, char *argv[])
 	start_frame();  // One extra clock cycle per LED, but we can only send bytes
 
 	// Save the current state for another time
-	json_object_to_file_ext("/tmp/leds.json", state, JSON_C_TO_STRING_PRETTY);
+	json_object_to_file_ext(LED_STATE_FILE, state, JSON_C_TO_STRING_PRETTY);
 
 	json_object_put(state);
 

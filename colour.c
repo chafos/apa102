@@ -1,6 +1,7 @@
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
 
@@ -71,7 +72,7 @@ int main(int argc, char *argv[])
 			printf("Usage: colour -X <000000 - FFFFFF> -b <0 - 31> -b <1 - 10>\n");
 			return 1;
 		default:
-			abort ();
+			return 1;
 		}
 	}
 
