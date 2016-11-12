@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <time.h>
 
+#include <json_object.h>
+#include <json_util.h>
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
 
@@ -79,19 +81,21 @@ int randomize(uint8_t *r, uint8_t *g, uint8_t *b) {
 	return 0;
 }
 
+#define LEDS_MAX 10
+
 int main(int argc, char *argv[])
 {
 	uint32_t colour = 0;
 	uint8_t red, green, blue;
 	uint8_t brightness = 31;
-	uint8_t leds = 10;
+	uint8_t leds = LEDS_MAX;
 	uint16_t delay = 10;
-	uint8_t iterations = 10;
 	int i, j, c;
 	int position = 0;
-	int random = 0;
+	int clear = 0;
+	json_object *state = NULL;
 
-	while ((c = getopt (argc, argv, "X:b:l:t:i:rh")) != -1) {
+	while ((c = getopt (argc, argv, "X:b:l:p:Ch")) != -1) {
 		switch (c) {
 		case 'X':
 			colour = strtol(optarg, NULL, 16);
@@ -102,21 +106,22 @@ int main(int argc, char *argv[])
 		case 'b':
 			brightness = atoi(optarg);
 			break;
+		case 'p':
+			position = atoi(optarg);
+			if ((position < 0) || (position > leds)) {
+				printf("Incorrect LED position\n");
+				return 1;
+			}
+			break;
 		case 'l':
 			leds = atoi(optarg);
 			break;
-		case 't':
-			delay = atoi(optarg);
-			break;
-		case 'i':
-			iterations = atoi(optarg);
-			break;
-		case 'r':
-			random = 1;
+		case 'C':
+			clear = 1;
 			break;
 		case '?':
 		case 'h':
-			printf("Usage: colour -X <000000 - FFFFFF> -b <0 - 31> -b <1 - 10>\n");
+			printf("Usage: led [-l <1 - 10>] -p <0 - %d> -X <000000 - FFFFFF> -b <0 - 31>\n", leds);
 			return 1;
 		default:
 			abort ();
@@ -131,29 +136,50 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	int total = (2 * iterations * leds) - (2 * iterations) + 1;
-	for (i = 0; i < total; i++) {
-		start_frame();
+	if (clear) {
+		clear_display(LEDS_MAX);
+		return 0;
+	}
 
-		for (j = 0; j <= leds; j++) {
-			if (position == j) {
-				if (1 == random)
-					randomize(&red, &green, &blue);
-printf("Red = 0x%02x, green = 0x%02x, blue = 0x%02x\n", red, green, blue);
-				send_frame(red, green, blue, brightness);
-			} else
-				send_frame(0, 0, 0, 16);
+	state = json_object_from_file("/tmp/leds.json");
+	
+	// Load led configuration - if doesn't exist, then create it
+	if (NULL == state) {
+		state = json_object_new_array();
+	}
+
+	json_object *led = json_object_new_object();
+	json_object_object_add(led, "red", json_object_new_int((uint32_t) red));
+	json_object_object_add(led, "green", json_object_new_int((uint32_t) green));
+	json_object_object_add(led, "blue", json_object_new_int((uint32_t) blue));
+	json_object_object_add(led, "brightness", json_object_new_int((uint32_t) brightness));
+
+	// Replace or insert into array
+	json_object_array_put_idx(state, position, led);
+	
+	start_frame();
+
+	for (i = 0; i < LEDS_MAX; i++) {
+		if (NULL == (led = json_object_array_get_idx(state, i))) {
+			red = green = blue = brightness = 0;
+		} else {
+			red = (uint8_t) json_object_get_int(json_object_object_get(led, "red"));
+			green = (uint8_t) json_object_get_int(json_object_object_get(led, "green"));
+			blue = (uint8_t) json_object_get_int(json_object_object_get(led, "blue"));
+			brightness = (uint8_t) json_object_get_int(json_object_object_get(led, "brightness"));
 		}
 
-		start_frame();  // One extra clock cycle per LED, but we can only send bytes
+		//printf("Red = 0x%02x, green = 0x%02x, blue = 0x%02x, brightness = 0x%02x\n", red, green, blue, brightness);
+		send_frame(red, green, blue, brightness);
 		usleep(delay * 1000);
-
-		position = next(position, 0, 9);
-//		printf("Next is %d\n", position);
 	}
+
 	start_frame();  // One extra clock cycle per LED, but we can only send bytes
 
-	clear_display(leds);
+	// Save the current state for another time
+	json_object_to_file_ext("/tmp/leds.json", state, JSON_C_TO_STRING_PRETTY);
+
+	json_object_put(state);
 
 	return 0;
 }
